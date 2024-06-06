@@ -107,10 +107,10 @@ public class RobotContainer {
         intakeCamVision = IntakeCamVision.initialize(new IntakeCamVisionIO() {});
         drive = Drive.initialize(
             new GyroIOSim(),
-            new ModuleIOSim(DriveConstants.kFrontLeftChassisAngularOffset),
-            new ModuleIOSim(DriveConstants.kFrontRightChassisAngularOffset),
-            new ModuleIOSim(DriveConstants.kBackLeftChassisAngularOffset),
-            new ModuleIOSim(DriveConstants.kBackRightChassisAngularOffset));
+            new ModuleIOSim(0, DriveConstants.kFrontLeftChassisAngularOffset),
+            new ModuleIOSim(3, DriveConstants.kFrontRightChassisAngularOffset),
+            new ModuleIOSim(1, DriveConstants.kBackLeftChassisAngularOffset),
+            new ModuleIOSim(2, DriveConstants.kBackRightChassisAngularOffset));
         break;
 
       default:
@@ -183,7 +183,7 @@ public class RobotContainer {
             Map.entry(State.SHUTTLE, new AlignShuttle())),
             StateManager::getState),
         shooter.revSpeaker()
-          .alongWith(pivot.aim()),
+          .alongWith(pivot.aimSpeakerDynamic()),
         () -> StateManager.isAutomate()
       )
     );

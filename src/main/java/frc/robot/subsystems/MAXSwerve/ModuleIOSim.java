@@ -24,7 +24,10 @@ public class ModuleIOSim implements ModuleIO {
     private SimpleMotorFeedforward feedforward = new SimpleMotorFeedforward(0, 2.002); //2.002
     private PIDController driveController = new PIDController(0.04, 0, 0);
 
-    public ModuleIOSim(double chassisAngularOffset) {
+    private int n;
+
+    public ModuleIOSim(int n, double chassisAngularOffset) {
+        this.n = n;
         turnController.enableContinuousInput(0, 2 * Math.PI);
     }
 
@@ -38,14 +41,14 @@ public class ModuleIOSim implements ModuleIO {
     public void setDesiredState(SwerveModuleState state) {
         // Optimize the reference state to avoid spinning further than 90 degrees.
         SwerveModuleState optimizedDesiredState = SwerveModuleState.optimize(state,
-                new Rotation2d(turnSim.getAngularPositionRad()));
+                new Rotation2d(Drive.model.getTurnAngularPosition(n)));
 
-        double driveVolts = feedforward.calculate(optimizedDesiredState.speedMetersPerSecond) + driveController.calculate(driveSim.getAngularVelocityRadPerSec() * ModuleConstants.kWheelDiameterMeters / 2, optimizedDesiredState.speedMetersPerSecond);
-        double turnOutput = turnController.calculate(turnSim.getAngularPositionRad(), optimizedDesiredState.angle.getRadians());
+        double driveVolts = feedforward.calculate(optimizedDesiredState.speedMetersPerSecond) + driveController.calculate(Drive.model.getDriveAngularVelocity(n) * ModuleConstants.kWheelDiameterMeters / 2, optimizedDesiredState.speedMetersPerSecond);
+        double turnOutput = turnController.calculate(Drive.model.getTurnAngularPosition(n), optimizedDesiredState.angle.getRadians());
         
         if (DriverStation.isEnabled()) {
-            driveSim.setInputVoltage(MathUtil.clamp(driveVolts, -12, 12));
-            turnSim.setInputVoltage(MathUtil.clamp(turnOutput, -12, 12));
+            Drive.model.setDriveVoltage(n, MathUtil.clamp(driveVolts, -12, 12));
+            Drive.model.setTurnVoltage(n, MathUtil.clamp(turnOutput, -12, 12));
         }
 
         optimizedState = new SwerveModuleState(optimizedDesiredState.speedMetersPerSecond, optimizedDesiredState.angle);
@@ -67,18 +70,18 @@ public class ModuleIOSim implements ModuleIO {
 
     @Override
     public void updateInputs(ModuleIOInputs inputs) {
-        driveSim.update(LOOP_PERIOD_SECS);
-        turnSim.update(LOOP_PERIOD_SECS);
+        // driveSim.update(LOOP_PERIOD_SECS);
+        // turnSim.update(LOOP_PERIOD_SECS);
 
         if (DriverStation.isDisabled()) {
-            driveSim.setInputVoltage(0);
-            turnSim.setInputVoltage(0);
+            Drive.model.setTurnVoltage(n, 0);
+            Drive.model.setDriveVoltage(n, 0);
         }
 
-        inputs.drivePositionMeters = driveSim.getAngularPositionRad() * ModuleConstants.kWheelDiameterMeters / 2;
-        inputs.driveVelocityMetersPerSec = driveSim.getAngularVelocityRadPerSec() * ModuleConstants.kWheelDiameterMeters / 2;
-        inputs.turnAbsolutePosition = Rotation2d.fromRadians(turnSim.getAngularPositionRad());
-        inputs.turnVelocityRadPerSec = turnSim.getAngularVelocityRadPerSec();
+        inputs.drivePositionMeters = Drive.model.getDriveAngularPosition(n) * ModuleConstants.kWheelDiameterMeters / 2;
+        inputs.driveVelocityMetersPerSec = Drive.model.getDriveAngularVelocity(n) * ModuleConstants.kWheelDiameterMeters / 2;
+        inputs.turnAbsolutePosition = Rotation2d.fromRadians(Drive.model.getTurnAngularPosition(n));
+        inputs.turnVelocityRadPerSec = Drive.model.getTurnAngularVelocity(n);
     }
 
 }

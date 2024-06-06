@@ -36,6 +36,7 @@ import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.numbers.N3;
+import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.trajectory.TrapezoidProfile.Constraints;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.util.CircularBuffer;
@@ -63,6 +64,8 @@ public class Drive extends SubsystemBase {
     private final Module m_frontRight;
     private final Module m_rearLeft;
     private final Module m_rearRight;
+
+    public static final SwerveSim model = new SwerveSim(DCMotor.getNeoVortex(1), DCMotor.getNeo550(1), 4.71, 46.42);
 
     // The gyro sensor
     private GyroIO gyro;
@@ -141,7 +144,7 @@ public class Drive extends SubsystemBase {
           // Odometry class for tracking robot pose
         m_poseEstimator = new SwerveDrivePoseEstimator(
             DriveConstants.kDriveKinematics,
-                gyroInputs.yaw,
+                getRotationHeading(),
                 new SwerveModulePosition[] {
                         m_frontLeft.getPosition(),
                         m_frontRight.getPosition(),
@@ -221,6 +224,7 @@ public class Drive extends SubsystemBase {
     public void periodic() {
         gyro.updateInputs(gyroInputs);
         Logger.processInputs("Gyro", gyroInputs);
+        model.update();
         m_frontLeft.updateInputs();
         m_frontRight.updateInputs();
         m_rearLeft.updateInputs();
@@ -239,8 +243,10 @@ public class Drive extends SubsystemBase {
             gyroPos = new Pose2d(gyroPos.getTranslation(), getRotationHeading()).transformBy(gyroVel.times(0.02));
         }
 
+        Logger.recordOutput("Real Pose", new Pose2d(model.getX(), model.getY(), model.getRotation()));
+
         m_poseEstimator.update(
-                gyroInputs.yaw,
+                getRotationHeading(),
                 new SwerveModulePosition[] {
                     m_frontLeft.getPosition(),
                     m_frontRight.getPosition(),
@@ -330,7 +336,7 @@ public class Drive extends SubsystemBase {
      * @return The pose.
      */
     public Pose2d getPose() {
-        return m_poseEstimator.getEstimatedPosition();
+        return model.getPose();
     }
 
     /**
@@ -340,7 +346,7 @@ public class Drive extends SubsystemBase {
      */
     public void resetOdometry(Pose2d pose) {
         m_poseEstimator.resetPosition(
-                gyroInputs.yaw,
+                getRotationHeading(),
                 new SwerveModulePosition[] {
                         m_frontLeft.getPosition(),
                         m_frontRight.getPosition(),
@@ -348,6 +354,8 @@ public class Drive extends SubsystemBase {
                         m_rearRight.getPosition()
                 },
                 pose);
+
+        model.resetPosition(pose);
 
         this.pose = pose;
     }
@@ -472,16 +480,16 @@ public class Drive extends SubsystemBase {
         currentState[1] = m_frontRight.getState();
         currentState[2] = m_rearLeft.getState();
         currentState[3] = m_rearRight.getState();
-        ChassisSpeeds speed = DriveConstants.kDriveKinematics.toChassisSpeeds(currentState);
+        ChassisSpeeds speed = model.getChassisSpeeds();
         return new Translation2d(speed.vxMetersPerSecond, speed.vyMetersPerSecond);
     }
 
     public Translation2d getFieldRelativeTranslationVelocity(){
         SwerveModuleState[] currentState = new SwerveModuleState[4];
-        currentState[0] = m_frontLeft.getFieldRelativeState(gyroInputs.yaw);
-        currentState[1] = m_frontRight.getFieldRelativeState(gyroInputs.yaw);
-        currentState[2] = m_rearLeft.getFieldRelativeState(gyroInputs.yaw);
-        currentState[3] = m_rearRight.getFieldRelativeState(gyroInputs.yaw);
+        currentState[0] = m_frontLeft.getFieldRelativeState(getRotationHeading());
+        currentState[1] = m_frontRight.getFieldRelativeState(getRotationHeading());
+        currentState[2] = m_rearLeft.getFieldRelativeState(getRotationHeading());
+        currentState[3] = m_rearRight.getFieldRelativeState(getRotationHeading());
         ChassisSpeeds speed = DriveConstants.kDriveKinematics.toChassisSpeeds(currentState);
         return new Translation2d(speed.vxMetersPerSecond, speed.vyMetersPerSecond);
     }
@@ -545,15 +553,15 @@ public class Drive extends SubsystemBase {
     }
 
     public double getHeading() {
-        return gyroInputs.yaw.getDegrees();
+        return model.getRotation().getDegrees();
     }
 
     public Rotation2d getRotationHeading() {
-        return gyroInputs.yaw;
+        return model.getRotation();
     }
 
     public double getWrappedHeading(){
-        return MathUtil.angleModulus(gyroInputs.yaw.getRadians());
+        return MathUtil.angleModulus(getRotationHeading().getRadians());
     }
 
     /**
@@ -568,7 +576,7 @@ public class Drive extends SubsystemBase {
     private ChassisSpeeds getRobotRelativeSpeeds() {
         // Uses forward kinematics to calculate the robot's speed given the states of
         // the swerve modules.
-        return DriveConstants.kDriveKinematics.toChassisSpeeds(getModuleStates());
+        return model.getChassisSpeeds();
     }
 
      /*private void driveRobotRelative(ChassisSpeeds speeds) {
@@ -589,7 +597,7 @@ public class Drive extends SubsystemBase {
     
     public void runVelocity(ChassisSpeeds speeds, boolean fieldRelative) {
         speeds = fieldRelative
-            ? ChassisSpeeds.fromFieldRelativeSpeeds(speeds, gyroInputs.yaw)
+            ? ChassisSpeeds.fromFieldRelativeSpeeds(speeds, getRotationHeading())
             : speeds;
 
         speeds = ChassisSpeedsUtil.correctForDynamics(speeds, 0.02, DriveConstants.driftRate);
