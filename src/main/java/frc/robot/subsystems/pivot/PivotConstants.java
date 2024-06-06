@@ -42,23 +42,34 @@ public final class PivotConstants {
     public static final InterpolatingDoubleTreeMap armAngleMap = new InterpolatingDoubleTreeMap();
 
     static {
+        // armAngleMap.put(1.17, 0.6);
+        // armAngleMap.put(2.0, 0.4);
+        // armAngleMap.put(3.29, 0.2);
+        // armAngleMap.put(3.88, 0.172);
+        // armAngleMap.put(4.2, 0.14);
+        // armAngleMap.put(5.0, 0.1);
+        // armAngleMap.put(5.3, 0.089);
+        // armAngleMap.put(5.54, 0.075);
+        // armAngleMap.put(5.83, 0.07);
+
         armAngleMap.put(1.17, 0.6);
         armAngleMap.put(2.0, 0.4);
         armAngleMap.put(3.29, 0.2);
-        armAngleMap.put(3.88, 0.172);
+        armAngleMap.put(3.88, 0.156);
         armAngleMap.put(4.2, 0.14);
+        armAngleMap.put(4.3, 0.127);
         armAngleMap.put(5.0, 0.1);
+        armAngleMap.put(5.3, 0.089);
+        armAngleMap.put(5.54, 0.075);
         armAngleMap.put(5.83, 0.07);
-        // armAngleMap.put(5.7, 0.112);
-        // armAngleMap.put(6.1, 0.107);
-        // armAngleMap.put(6.4, 0.095);
+
     }
 
     public record PivotSettings(double kP, double kI, double kD, Constraints constraints){}
 
     public enum PivotMode {
         FAST(new PivotSettings(27, 2, 0.2, new Constraints(4.5, 5.5))),
-        SLOW(new PivotSettings(8, 4, 0.15, new Constraints(2.5, 3.5)));
+        SLOW(new PivotSettings(14, 4, 0.0, new Constraints(2.5, 3.5)));
 
         public PivotSettings settings;
 

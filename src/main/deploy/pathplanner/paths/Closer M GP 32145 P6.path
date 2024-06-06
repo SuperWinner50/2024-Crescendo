@@ -3,13 +3,13 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 3.52,
-        "y": 6.66
+        "x": 4.1,
+        "y": 6.7
       },
       "prevControl": null,
       "nextControl": {
-        "x": 3.984090364757048,
-        "y": 6.640044321458116
+        "x": 4.564090364757048,
+        "y": 6.680044321458116
       },
       "isLocked": false,
       "linkedName": null
@@ -49,7 +49,7 @@
     }
   ],
   "globalConstraints": {
-    "maxVelocity": 5.0,
+    "maxVelocity": 4.8,
     "maxAcceleration": 6.0,
     "maxAngularVelocity": 540.0,
     "maxAngularAcceleration": 720.0
@@ -62,7 +62,7 @@
   "reversed": false,
   "folder": "M 32145",
   "previewStartingState": {
-    "rotation": 18.0041616059132,
+    "rotation": 20.0,
     "velocity": 0
   },
   "useDefaultConstraints": true

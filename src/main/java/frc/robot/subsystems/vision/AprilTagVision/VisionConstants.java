@@ -12,10 +12,10 @@ import edu.wpi.first.math.util.Units;
 
 public class VisionConstants {
     public static final double fieldBorderMargin = 0.5;
-    public static final double zMargin = 0.75;
+    public static final double zMargin = 0.5;
 
     public static final double xyStdDevSingleTag = 0.03;
-    public static final double xyStdDevMultiTag = 0.012;
+    public static final double xyStdDevMultiTag = 0.018;
 
     public static final String[] cameraIds =
     new String[] {
@@ -66,6 +66,8 @@ public class VisionConstants {
         }
     }
 
-    public static final double areaCutoff = 20;
-    public static final double timeDelay = 0.8;
+    public static final double areaCutoff = 11;
+    public static final double timeDelay = 0.5;
+    public static final double intakeCamOffset = 0.3;
+    public static final double degreeTolerance = 6.5;
 }

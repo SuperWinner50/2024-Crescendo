@@ -122,8 +122,9 @@ public class Pivot extends SubsystemBase {
             // double change = -PivotConstants.manualSpeed *
             // MathUtil.applyDeadband(OIConstants.operatorController.getLeftY(),
             // OIConstants.kAxisDeadband);
-
-            setGoal(goal + change);
+            if(DriverStation.isTeleop()){
+                setGoal(goal + change);   
+            }
         }));
     }
 
@@ -206,6 +207,13 @@ public class Pivot extends SubsystemBase {
         ).alongWith(aiming());
     }
 
+    public Command aimAmpManual(){
+        return Commands.startEnd(
+            () -> setGoal(PivotSetpoints.manualAmp),
+            () -> setGoal(PivotSetpoints.stow)
+        ).alongWith(aiming());
+    }
+
     public Command aimSource() {
         return Commands.startEnd(
             () -> setGoal(PivotSetpoints.source),
@@ -253,7 +261,11 @@ public class Pivot extends SubsystemBase {
             if (DriverStation.isDisabled()) {
                 io.setVoltage(0);
             } else {
-                io.setVoltage(PIDVolts + FFVolts + 0.22 * Math.cos(getPosition() + 1.62) + getAccelerationCompensation());
+                if(mode == PivotMode.FAST){
+                    io.setVoltage(PIDVolts + FFVolts + linearFF() + getAccelerationCompensation());
+                } else {
+                    io.setVoltage(PIDVolts + linearFF() + getAccelerationCompensation());
+                }
             }
         }
 
@@ -261,7 +273,7 @@ public class Pivot extends SubsystemBase {
         Logger.recordOutput("Pivot/Stabilization Compensation Voltage", getAccelerationCompensation());
         Logger.recordOutput("Pivot/PID Volts", PIDVolts);
         Logger.recordOutput("Pivot/FF Volts", FFVolts);
-        Logger.recordOutput("Pivot/Static gain volts", linearFF(getPosition()));
+        Logger.recordOutput("Pivot/Static gain volts", linearFF());
         Logger.recordOutput("Pivot/Setpoint Position", controller.getSetpoint().position);
         Logger.recordOutput("Pivot/Setpoint Velocity", controller.getSetpoint().velocity);
         Logger.recordOutput("Pivot/Goal", goal);
@@ -285,8 +297,8 @@ public class Pivot extends SubsystemBase {
     //     return Tg + Ts;
     // }
 
-    public double linearFF(double angle) {
-        return -0.12 * angle - 0.01;
+    public double linearFF() {
+        return 0.22 * Math.cos(getPosition() + 1.62);
     }
 
     public void runVoltage(double volts) {
