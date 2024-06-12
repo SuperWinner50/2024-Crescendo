@@ -49,7 +49,7 @@ public final class Constants {
 
   public static void getAlliance(){
     DriverStation.getAlliance().ifPresent((ally) -> {
-      alliance = ally;
+      alliance = ally; 
     });
   }
 

@@ -66,7 +66,7 @@ public class GDA_AS456 {
                     AutoCommands.intakeTrajectory(note5), 
                     AutoCommands.intakeTrajectory(paths.get(2)), 
                     () -> noNoteDetected()),
-                Commands.runOnce(() -> AutoGamepieces.setNoteGone(5)).onlyIf(() -> noNoteDetected(false)),
+                Commands.runOnce(() -> AutoGamepieces.setNoteGone(5)).onlyIf(() -> noNoteDetected(true)),
                 AutoCommands.followTrajectory(paths.get(3)),
                 Commands.parallel(
                     AutoCommands.aimSpeakerDynamic(true, 5000),

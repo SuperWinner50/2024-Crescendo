@@ -20,7 +20,7 @@ public class ModuleIOSim implements ModuleIO {
 
     private SwerveModuleState optimizedState = new SwerveModuleState();
 
-    private PIDController turnController = new PIDController(3, 0, 0);
+    private PIDController turnController = new PIDController(1, 0, 0);
     private SimpleMotorFeedforward feedforward = new SimpleMotorFeedforward(0, 2.002); //2.002
     private PIDController driveController = new PIDController(0.04, 0, 0);
 
@@ -43,12 +43,12 @@ public class ModuleIOSim implements ModuleIO {
         SwerveModuleState optimizedDesiredState = SwerveModuleState.optimize(state,
                 new Rotation2d(Drive.model.getTurnAngularPosition(n)));
 
-        double driveVolts = feedforward.calculate(optimizedDesiredState.speedMetersPerSecond) + driveController.calculate(Drive.model.getDriveAngularVelocity(n) * ModuleConstants.kWheelDiameterMeters / 2, optimizedDesiredState.speedMetersPerSecond);
+        double driveOutput = feedforward.calculate(optimizedDesiredState.speedMetersPerSecond) + driveController.calculate(Drive.model.getDriveAngularVelocity(n) * ModuleConstants.kWheelDiameterMeters / 2, optimizedDesiredState.speedMetersPerSecond);
         double turnOutput = turnController.calculate(Drive.model.getTurnAngularPosition(n), optimizedDesiredState.angle.getRadians());
         
         if (DriverStation.isEnabled()) {
-            Drive.model.setDriveVoltage(n, MathUtil.clamp(driveVolts, -12, 12));
-            Drive.model.setTurnVoltage(n, MathUtil.clamp(turnOutput, -12, 12));
+            Drive.model.setDriveVoltage(n, MathUtil.clamp(12 * driveOutput, -12, 12));
+            Drive.model.setTurnVoltage(n, MathUtil.clamp(12 * turnOutput, -12, 12));
         }
 
         optimizedState = new SwerveModuleState(optimizedDesiredState.speedMetersPerSecond, optimizedDesiredState.angle);

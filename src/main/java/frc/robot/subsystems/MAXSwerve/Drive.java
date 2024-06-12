@@ -39,6 +39,7 @@ import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.trajectory.TrapezoidProfile.Constraints;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.util.CircularBuffer;
 import edu.wpi.first.util.WPIUtilJNI;
 import frc.robot.Constants;
@@ -52,6 +53,7 @@ import frc.robot.subsystems.vision.AprilTagVision.Vision;
 import frc.robot.util.ChassisSpeedsUtil;
 import frc.robot.util.LoggedTunableNumber;
 import frc.robot.util.SwerveUtils;
+import frc.robot.util.Util;
 import frc.robot.util.Util.AllianceFlipUtil;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
@@ -230,6 +232,9 @@ public class Drive extends SubsystemBase {
         m_rearLeft.updateInputs();
         m_rearRight.updateInputs();
 
+        
+        // Logger.recordOutput("Voltage", NetworkTableInstance.getEntry("URCL/SparkFlex-2/AppliedOutputVoltage").getDouble(0.0));
+
         Xaccel.addLast(gyroInputs.accel[0]);
 
         ticks += 1;
@@ -318,6 +323,10 @@ public class Drive extends SubsystemBase {
     }
 
     public boolean between(Rotation2d x, Rotation2d min, Rotation2d max) {
+        if (Util.epsilonEquals(min.getRadians(), max.getRadians())) {
+            return (x == min);
+        }
+
         if (max.minus(min).getSin() < 0.0) {
             return between(x, max, min);
         }
