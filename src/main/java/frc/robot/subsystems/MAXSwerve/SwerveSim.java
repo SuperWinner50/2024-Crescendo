@@ -20,6 +20,7 @@ import edu.wpi.first.math.system.NumericalJacobian;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.wpilibj.simulation.BatterySim;
 import frc.robot.Constants;
+import frc.robot.util.Util;
 
 import static java.lang.Math.pow;
 import static java.lang.Math.signum;
@@ -31,6 +32,8 @@ import static java.lang.Math.hypot;
 import static java.lang.Math.log;
 import static java.lang.Math.max;
 import static java.lang.Math.sqrt;
+
+import java.util.Arrays;
 import java.util.function.Function;
 
 import org.littletonrobotics.junction.AutoLogOutput;
@@ -51,11 +54,15 @@ public class SwerveSim {
     private DCMotor driveMotor, turnMotor;
     private double driveG, turnG;
 
+    private double wireResistance = 0.005; // ohms for 1m of 12awg wire
+
     private Vector<N22> state = new Vector<N22>(N22.instance);
     private Vector<N8> input = new Vector<N8>(N8.instance);
 
     private int max_depth = 0;
     private int iters = 0;
+    private int calcs = 0;
+    private int bat_iters = 0;
 
     public SwerveSim(DCMotor drivingMotor, DCMotor turningMotor, double drivingG, double turningG) {
         this.driveMotor = drivingMotor;
@@ -70,37 +77,30 @@ public class SwerveSim {
         this.kAD = drivingG * drivingMotor.KtNMPerAmp / drivingMotor.rOhms;
         this.kAT = turningG * turningMotor.KtNMPerAmp / turningMotor.rOhms;
 
+
+
         // System.out.println(kVD);
         // System.out.println(kVT);
         // System.out.println(kAD);
         // System.out.println(kAT);
         // System.exit(0);
+    }
 
-        // var state = MatBuilder.fill(N22.instance, N1.instance, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1,  1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.1, 2.2);
-        // System.out.println(jacobian(state));
-        // Function<Matrix<N22, N1>, Matrix<N22, N1>> f = (q) -> q.minus(dqdt(q, input).times(dt)).minus((Matrix<N22, N1>)state);
-        // System.out.println(numericalJacobian(N22.instance, N22.instance, f, state));
-        // System.exit(0);
-
-
+    public static double currentLimit(DCMotor motor, double angVel, double volts, double limit) {
+        double I = motor.getCurrent(angVel, volts);
+        if (Math.abs(I) > limit) {
+            return motor.getVoltage(motor.getTorque(Math.copySign(limit, I)), angVel);
+        } else {
+            return volts;
+        }
     }
 
     private double currentLimitDrive(int n, double v) {
-        double I = driveMotor.getCurrent(getDriveAngularVelocity(n) * driveG, v);
-        if (Math.abs(I) > Constants.CurrentLimits.drive) {
-            return driveMotor.getVoltage(driveMotor.getTorque(Math.copySign(Constants.CurrentLimits.drive, I)), getDriveAngularVelocity(n) * driveG);
-        } else {
-            return v;
-        }
+        return currentLimit(driveMotor, getDriveAngularVelocity(n) * driveG, v, Constants.CurrentLimits.drive);
     }
 
     private double currentLimitTurn(int n, double v) {
-        double I = turnMotor.getCurrent(getTurnAngularVelocity(n) * turnG, v);
-        if (Math.abs(I) > Constants.CurrentLimits.turning) {
-            return turnMotor.getVoltage(turnMotor.getTorque(Math.copySign(Constants.CurrentLimits.turning, I)), getTurnAngularVelocity(n) * turnG);
-        } else {
-            return v;
-        }
+        return currentLimit(turnMotor, getTurnAngularVelocity(n) * turnG, v, Constants.CurrentLimits.turning);
     }
 
     public void resetPosition(Pose2d pose) {
@@ -216,11 +216,8 @@ public class SwerveSim {
         // return 1.25;
     }
 
-
-
-
-    // private double cof(double v)
-
+    // Jacobian of the system
+    // Current implementation uses numerical jacobian approximation
     private Matrix<N22, N22> jacobian(Matrix<N22, N1> state) {
         double q0 = state.get(0, 0), dq0 = state.get(11, 0);
         double q1 = state.get(1, 0), dq1 = state.get(12, 0);
@@ -934,6 +931,7 @@ public class SwerveSim {
         return result;
     }
 
+    // Change in state with respect to time
     private Matrix<N22, N1> dqdt(Matrix<N22, N1> state, Matrix<N8, N1> input) {
         double q0 = state.get(0, 0), dq0 = state.get(11, 0);
         double q1 = state.get(1, 0), dq1 = state.get(12, 0);
@@ -1070,17 +1068,13 @@ public class SwerveSim {
         return x.plus(diff);
     }
 
-    // private class N22Mat extends Matrix<N22, N22> {
-    //     public N22Mat() {
-    //         super();
-    //     }
-    // }
-
     Matrix<N22, N1> r2(Function<Matrix<N22, N1>, Matrix<N22, N1>> f, Matrix<N22, N1> x, double dt) {
         // var jacobian = jacobian(x);
         var jacobian = numericalJacobian(N22.instance, N22.instance, f, state);
         double d = 1 - sqrt(2) / 2;
         double a21 = (sqrt(2) - 1) / 2;
+
+        calcs += 1;
 
         var A = Matrix.eye(N22.instance).minus(jacobian.times(d * dt)).inv();
         var k1 = A.times(f.apply(x));
@@ -1101,6 +1095,8 @@ public class SwerveSim {
 
         double d = 0.5728160625;
 
+        calcs += 1;
+
         try {
             var A = Matrix.eye(N22.instance).minus(jacobian.times(d * dt)).inv();
             var k1 = A.times(f.apply(x));
@@ -1115,19 +1111,22 @@ public class SwerveSim {
         }
     }
 
-    Matrix<N22, N1> r_iter(Function<Matrix<N22, N1>, Matrix<N22, N1>> f, Matrix<N22, N1> x, double dt) {
-        var ym = r2(f, x, dt);
-        var yms = r2(f, r2(f, x, dt/2), dt/2);
+    Matrix<N22, N1> r_iter(Function<Matrix<N22, N1>, Matrix<N22, N1>> f, Matrix<N22, N1> ym, Matrix<N22, N1> x, double dt, int depth) {
+        var ym1 = r2(f, x, dt/2);
+        var ym2 = r2(f, ym1, dt/2);
 
-        max_depth = max(max_depth, (int)(-log(dt / this.dt) / log(2)));
+        max_depth = max(max_depth, depth);
         iters += 1;
 
-        double e = new Vector<N22>(yms.minus(ym)).norm();
+        double e = new Vector<N22>(ym2.minus(ym)).norm();
 
-        if (e > 0.1) {
-            return r_iter(f, r_iter(f, x, dt/2), dt/2);
+        if (e > 0.1 && depth < 8) {
+            var ym3 = r_iter(f, ym1, x, dt/2, depth + 1);
+            var ym4 = r2(f, ym3, dt/2);
+
+            return r_iter(f, ym4, ym3, dt/2, depth + 1);
         } else {
-            return yms;
+            return ym2;
         }
     }
 
@@ -1160,23 +1159,78 @@ public class SwerveSim {
 
         double slip = hypot(xs, ys);
 
-        return (slip > 0.005);
+        return (slip > 0.02);
     }
 
-    private double balanceVoltage(Function<Double, Double> totalCurrent) {
-        double v = 12;
-        for (int i = 0; i < 200; i++) {
-            double newv = 12 - 0.02 * totalCurrent.apply(v);
-            if (Math.abs(newv - v) < 0.01) {
-                return newv;
-            }
+    // Iterative calculation of voltage (doesnt work)
+    // private double balanceVoltage(Function<Double, Double> totalCurrent) {
+    //     double v = 12;
+    //     for (int i = 0; i < 200; i++) {
+    //         double newv = 12 - 0.02 * totalCurrent.apply(v);
+    //         if (Math.abs(newv - v) < 0.01) {
+    //             bat_iters = i + 1;
+    //             return newv;
+    //         }
 
-            v = newv;
+    //         v = newv;
+    //     }
+
+    //     bat_iters = 200;
+    //     return v;
+    // }
+
+    private double solve_voltage(int[] e, Matrix<N8, N1> input) {
+        double rb = 0.02;
+        double r1 = driveMotor.rOhms + wireResistance;
+        double r2 = turnMotor.rOhms + wireResistance;
+
+        double top = -12 * r1 * r2;
+
+        for (int i = 0; i < 4; i++) {
+            top += -rb * Math.abs(getDriveAngularVelocity(i)) * driveG / driveMotor.KvRadPerSecPerVolt * r2;
+            top += -rb * Math.abs(getTurnAngularVelocity(i)) * turnG / turnMotor.KvRadPerSecPerVolt * r1;
+            top += rb * e[i] * Math.abs(input.get(i, 0)) * r2;
+            top += rb * e[i + 4] * Math.abs(input.get(i + 4, 0)) * r1;
         }
 
-        return v;
+        double bottom = -r1 * r2 - 4 * rb * (r1 + r2);
+
+        for (int i = 0; i < 4; i++) {
+            bottom += rb * e[i] * r2;
+            bottom += rb * e[i + 4] * r1;
+        }
+
+        return top / bottom;
+    }
+    
+    private double battery_voltage(Matrix<N8, N1> input) {
+        final Integer[] idx = { 0, 1, 2, 3, 4, 5, 6, 7 };
+        final double[] data = input.getData();
+
+        // Sort idx by voltage data
+        java.util.Arrays.sort(idx, new java.util.Comparator<Integer>() {
+            @Override public int compare(final Integer o1, final Integer o2) {
+                return Double.compare(Math.abs(data[o1]), Math.abs(data[o2]));
+            }
+        });
+
+        // System.out.println(Arrays.toString(idx));
+        // System.out.println(Arrays.toString(data));
+
+        int[] e = { 0, 0, 0, 0, 0, 0, 0, 0 };
+        for (int i : idx) {
+            double v = solve_voltage(e, input);
+            // System.out.println(String.format("%f %f", v, 12 - 0.02 * currents(input, v)));
+            if (Util.epsilonEquals(12 - 0.02 * currents(input, v), v)) {
+                return v;
+            }
+            e[i] = 1;
+        }
+
+        return solve_voltage(e, input);
     }
 
+    // Total current
     private double currents(Matrix<N8, N1> input, double v) {
         double c = 0;
 
@@ -1184,33 +1238,42 @@ public class SwerveSim {
             double dv = input.get(n, 0);
             double tv = input.get(n + 4, 0);
 
-            c += Math.abs(driveMotor.getCurrent(getDriveAngularVelocity(n) * driveG, Math.copySign(Math.min(Math.abs(dv), v), dv)));
-            c += Math.abs(turnMotor.getCurrent(getTurnAngularVelocity(n) * turnG, Math.copySign(Math.min(Math.abs(tv), v), tv)));
+            c += getDriveSupplyCurrent(n, Math.copySign(Math.min(Math.abs(dv), v), dv));
+            c += getTurnSupplyCurrent(n, Math.copySign(Math.min(Math.abs(tv), v), tv));
         }
 
         return c;
     }
 
     public static <Rows extends Num, Cols extends Num, States extends Num>
-      Matrix<Rows, Cols> numericalJacobian(
-          Nat<Rows> rows,
-          Nat<Cols> cols,
-          Function<Matrix<Cols, N1>, Matrix<States, N1>> f,
-          Matrix<Cols, N1> x) {
-    var result = new Matrix<>(rows, cols);
+        Matrix<Rows, Cols> numericalJacobian(
+            Nat<Rows> rows,
+            Nat<Cols> cols,
+            Function<Matrix<Cols, N1>, Matrix<States, N1>> f,
+            Matrix<Cols, N1> x)
+    {
+        var result = new Matrix<>(rows, cols);
 
-    for (int i = 0; i < cols.getNum(); i++) {
-      var dxPlus = x.copy();
-      var dxMinus = x.copy();
-      dxPlus.set(i, 0, dxPlus.get(i, 0) + 1e-9);
-      dxMinus.set(i, 0, dxMinus.get(i, 0) - 1e-9);
-      var dF = f.apply(dxPlus).minus(f.apply(dxMinus)).div(2 * 1e-9);
+        for (int i = 0; i < cols.getNum(); i++) {
+            var dxPlus = x.copy();
+            var dxMinus = x.copy();
+            dxPlus.set(i, 0, dxPlus.get(i, 0) + 1e-9);
+            dxMinus.set(i, 0, dxMinus.get(i, 0) - 1e-9);
+            var dF = f.apply(dxPlus).minus(f.apply(dxMinus)).div(2 * 1e-9);
 
-      result.setColumn(i, Matrix.changeBoundsUnchecked(dF));
+            result.setColumn(i, Matrix.changeBoundsUnchecked(dF));
+        }
+
+        return result;
     }
 
-    return result;
-  }
+    private double getDriveSupplyCurrent(int n, double volts) {
+        return (Math.abs(volts) - Math.abs(getDriveAngularVelocity(n)) * driveG / driveMotor.KvRadPerSecPerVolt) / (driveMotor.rOhms + wireResistance);
+    }
+
+    private double getTurnSupplyCurrent(int n, double volts) {
+        return (Math.abs(volts) - Math.abs(getTurnAngularVelocity(n)) * turnG / turnMotor.KvRadPerSecPerVolt) / (turnMotor.rOhms + wireResistance);
+    }
 
     public void update() {
         var limitedInput = input.copy();
@@ -1223,7 +1286,8 @@ public class SwerveSim {
             // totalCurrent += Math.abs(turnMotor.getCurrent(getTurnAngularVelocity(n) * turnG, limitedInput.get(n + 4, 0)));
         }
 
-        double batteryVoltage = balanceVoltage((v) -> currents(limitedInput, v));
+        // double batteryVoltage = balanceVoltage((v) -> currents(limitedInput, v));
+        double batteryVoltage = battery_voltage(limitedInput);
 
         for (int n = 0; n < 4; n++) {
             limitedInput.set(n, 0, MathUtil.clamp(limitedInput.get(n, 0), -batteryVoltage, batteryVoltage));
@@ -1235,6 +1299,7 @@ public class SwerveSim {
 
         // Logger.recordOutput("Model/Total Current", totalCurrent);
         Logger.recordOutput("Model/Battery Voltage", batteryVoltage);
+        // Logger.recordOutput("Model/Battery Voltage 2", v2);
 
         // for (int n = 0; n < 8; n++) {
         //     // double v = limitedInput.get(n, 0);
@@ -1255,12 +1320,17 @@ public class SwerveSim {
         //     next = r4(f, next, dt / 32);
         // }
 
-        next = r_iter(f, next, dt);
+
+        next = r_iter(f, r2(f, next, dt), next, dt, 0);
         error = new Vector<N22>(fF.apply(next)).norm();
         Logger.recordOutput("Model/Max depth", max_depth);
         Logger.recordOutput("Model/Iters", iters);
+        Logger.recordOutput("Model/Calcs", calcs);
+        Logger.recordOutput("Model/Battery Iters", bat_iters);
+
         max_depth = 0;
         iters = 0;
+        calcs = 0;
 
         // while (Math.abs(error) > 1e-4 && i < 1) {
         //     var update = r4(f, next, i);
@@ -1280,8 +1350,8 @@ public class SwerveSim {
         for (int n = 0; n < 4; n++) {
             String prefix = "Model/Module " + Integer.toString(n);
             double cr = driveMotor.getCurrent(getDriveAngularVelocity(n) * driveG, limitedInput.get(n, 0));
-            Logger.recordOutput(prefix + "/Drive Current", cr);
-            Logger.recordOutput(prefix + "/Drive Abs Current", Math.abs(cr));
+            Logger.recordOutput(prefix + "/Drive Stator Current", cr);
+            Logger.recordOutput(prefix + "/Drive Supply Current", getDriveSupplyCurrent(n, limitedInput.get(n, 0)));
             Logger.recordOutput(prefix + "/Turn Current", turnMotor.getCurrent(getTurnAngularVelocity(n) * turnG, limitedInput.get(n + 4, 0)));
             Logger.recordOutput(prefix + "/Drive Voltage", input.get(n, 0));
             Logger.recordOutput(prefix + "/Drive Limited Voltage", limitedInput.get(n, 0));
